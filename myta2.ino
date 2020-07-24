@@ -19,7 +19,7 @@ DHT dht[] = {
 };
 String ssid ="Biasa";
 String password="sandi12397";
-String server = "odi.sdnlada2.sch.id"; // www.example.com
+//String server = "odi.sdnlada2.sch.id"; // www.example.com
 String uri = "/index.php";// our example is /esppost.php
 String txt = "/test.json";
 float humidity[6];
@@ -27,6 +27,11 @@ float temperature[6];
 bool m[6];
 int pengganti[6];
 int tora=0;
+int trig_pin = 10;
+int echo_pin = 11;
+long echotime; 
+float distance;
+void(* ulang) (void) = 0;
 void setup()
 {
   Serial3.begin(115200);//AT+UART_DEF=9600,8,1,0,0
@@ -40,6 +45,11 @@ void setup()
   pinMode(33,OUTPUT);
   pinMode(34,OUTPUT);
   pinMode(35,OUTPUT);
+  pinMode(36,OUTPUT);
+  pinMode(37,OUTPUT);
+  pinMode(trig_pin, OUTPUT); 
+  pinMode(echo_pin, INPUT);
+  digitalWrite(trig_pin, LOW);
   reset();
   connectWifi();
 }
@@ -51,6 +61,13 @@ void loop()
     temperature[i] = dht[i].readTemperature();
     humidity[i] = dht[i].readHumidity();
   }
+  int tank=cekair();
+  if(tank>=80){
+    digitalWrite(36, LOW);
+  }else if(tank<10){
+    digitalWrite(36, HIGH);
+    tank=100;
+  }
   for (int i = 0; i < 6; i++) {
     Serial.print("T");
     Serial.print(i);
@@ -59,36 +76,36 @@ void loop()
     Serial.print(" || H");
     Serial.print(i);
     Serial.print(" = ");
-    Serial.println(humidity[i]);
+    Serial.print(humidity[i]);
     if(digitalRead(0)!=LOW){
       if(!isnan(temperature[i]) && !isnan(humidity[i])){
         if(temperature[i]>29 || humidity[i]<80 && !m[i]){
           digitalWrite(30+i,LOW);
-          Serial.println("Aktif dalam keadaan NORMAL");
+          Serial.println(" Aktif dalam keadaan NORMAL");
         }else{//kondisi ketika tombol otomatis dan suhu dalam keadaan normal
           if(m[i]){//manual dari tombol app walau sensor aktif
             digitalWrite(30+i,LOW);
-            Serial.println("Aktif dari app kondisi normal");
+            Serial.println(" Aktif dari app kondisi normal");
           }else{
             digitalWrite(30+i, HIGH);
-            Serial.println("OFF Kondisi Normal ke- "+String(i));
+            Serial.println(" OFF Kondisi Normal ke- "+String(i));
           }
         }
          pengganti[i]=0;
       }else{
         if(m[i]){//manual dari tombol app jika bernilai NaN
           digitalWrite(30+i,LOW);
-          Serial.println("Aktif dari tombol app kondisi Nan ke- "+String(i));
+          Serial.println(" Aktif dari tombol app kondisi Nan ke- "+String(i));
         }else{
           if(pengganti[i]!=0){
-            Serial.println("Pengganti di temukan di- "+String(pengganti[i]));
+            Serial.print(" Pengganti di temukan di- "+String(pengganti[i]));
             if(!isnan(temperature[pengganti[i]]) && !isnan(humidity[pengganti[i]])){
               if(temperature[pengganti[i]]>29 || humidity[pengganti[i]]<80){
                 digitalWrite(30+pengganti[i], LOW);
                 digitalWrite(30+i, LOW);
-                Serial.println("Aktif dari pengganti");
+                Serial.println(" Aktif dari pengganti");
               }else{
-                Serial.println("Nonaktif dari pengganti");
+                Serial.println(" Nonaktif dari pengganti");
                 digitalWrite(30+pengganti[i], HIGH);
                 digitalWrite(30+i, HIGH);
               }
@@ -96,7 +113,7 @@ void loop()
               pengganti[i]=0;
             }
           }else{
-            Serial.println("Mencari pengganti sensor ke- "+String(i));
+            Serial.println(" Mencari pengganti sensor ke- "+String(i));
             for (int s=0; s<6; s++){//perulangan mencari yang akan ditunjuk pengganti sensor yang mati/error
               if(!isnan(temperature[s]) && !isnan(humidity[s])){
                 if(temperature[s]>29 || humidity[s]<80){
@@ -120,11 +137,11 @@ void loop()
     if(i!=5){
       data+="tp"+String(i)+"="+temperature[i]+"&hm"+String(i)+"="+humidity[i]+"&";
     }else{
-      data+="tp"+String(i)+"="+temperature[i]+"&hm"+String(i)+"="+humidity[i];
+      data+="tp"+String(i)+"="+temperature[i]+"&hm"+String(i)+"="+humidity[i]+"&tank="+tank;
     }
   }
-  
-//  Serial.println(data);
+  Serial.println(tank);
+  Serial.println(data);
   httppost (uri);
   httppost (txt);
   data="";
@@ -132,14 +149,14 @@ void loop()
 }
 void httppost (String urr) {
   DynamicJsonDocument doc(1024);
-Serial3.println("AT+CIPSTART=\"TCP\",\"" + server + "\",80");//start a TCP connection.
+Serial3.println("AT+CIPSTART=\"TCP\",\"odi.sdnlada2.sch.id\",80");//start a TCP connection.
   if( Serial3.find("OK")) {
     Serial.println("TCP connection ready");
   }
-  delay(1000);
+//  delay(1000);
   String postRequest =
   "POST " + urr + " HTTP/1.0\r\n" +
-  "Host: " + server + "\r\n" +
+  "Host: odi.sdnlada2.sch.id\r\n" +
   "Accept: *" + "/" + "*\r\n" +
   "Content-Length: " + data.length() + "\r\n" +
   "Content-Type: application/x-www-form-urlencoded\r\n" +
@@ -164,6 +181,8 @@ Serial3.println("AT+CIPSTART=\"TCP\",\"" + server + "\",80");//start a TCP conne
           DeserializationError error=deserializeJson(doc, k);
           if(error){
             Serial.println("deserialize eror");
+            Serial.print(error.c_str());
+            ulang();
           }
           m[0]=doc["m0"].as<bool>();
           m[1]=doc["m1"].as<bool>();
@@ -171,16 +190,6 @@ Serial3.println("AT+CIPSTART=\"TCP\",\"" + server + "\",80");//start a TCP conne
           m[3]=doc["m3"].as<bool>();
           m[4]=doc["m4"].as<bool>();
           m[5]=doc["m5"].as<bool>();
-          if(m[0]){
-            Serial.println("true ke 0 bos");
-          }
-          if(m[1]){
-            Serial.println("true ke 1 bos");
-          }
-//          for(int dex=0; dex<6; dex++){
-//            m[dex]=doc["m"+String(dex)];
-//          }
-//          Serial.println(timed+" || "+times+" <<<<Hasil Tombol");
           Serial.println(k);
         }
         tora=0;
@@ -215,4 +224,12 @@ void connectWifi() {
     connectWifi();
     Serial.println("Cannot connect to wifi"); 
   }
+}
+int cekair(){
+  digitalWrite(trig_pin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trig_pin, LOW);
+  echotime= pulseIn(echo_pin, HIGH);
+  distance= 0.0001*((float)echotime*340.0)/2.0;
+  return distance;
 }
