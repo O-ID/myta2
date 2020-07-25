@@ -24,7 +24,7 @@ String uri = "/index.php";// our example is /esppost.php
 String txt = "/test.json";
 float humidity[6];
 float temperature[6];
-bool m[6];
+bool m[7];
 int pengganti[6];
 int tora=0;
 int trig_pin = 10;
@@ -62,11 +62,14 @@ void loop()
     humidity[i] = dht[i].readHumidity();
   }
   int tank=cekair();
-  if(tank>=80){
+  if(tank>80 || m[6]){
     digitalWrite(36, LOW);
-  }else if(tank<10){
+    Serial.println("Pompa AC Nyala");
+  }else if(tank<10 || !m[6]){
     digitalWrite(36, HIGH);
-    tank=100;
+    if(m[6]){
+      tank=100;
+    }
   }
   for (int i = 0; i < 6; i++) {
     Serial.print("T");
@@ -182,7 +185,7 @@ Serial3.println("AT+CIPSTART=\"TCP\",\"odi.sdnlada2.sch.id\",80");//start a TCP 
           if(error){
             Serial.println("deserialize eror");
             Serial.print(error.c_str());
-            ulang();
+//            ulang();
           }
           m[0]=doc["m0"].as<bool>();
           m[1]=doc["m1"].as<bool>();
@@ -190,6 +193,7 @@ Serial3.println("AT+CIPSTART=\"TCP\",\"odi.sdnlada2.sch.id\",80");//start a TCP 
           m[3]=doc["m3"].as<bool>();
           m[4]=doc["m4"].as<bool>();
           m[5]=doc["m5"].as<bool>();
+          m[6]=doc["tkk"].as<bool>();
           Serial.println(k);
         }
         tora=0;
