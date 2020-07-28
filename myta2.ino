@@ -1,6 +1,6 @@
 #include <ArduinoJson.h>
-
 #include <DHT.h>;
+#include <LiquidCrystal_I2C.h>
 
 #define DHTPIN1 2
 #define DHTPIN2 3
@@ -17,6 +17,7 @@ DHT dht[] = {
   {DHTPIN5, DHT22},
   {DHTPIN6, DHT22},
 };
+LiquidCrystal_I2C lcd(0x27,20,4);
 String ssid ="Biasa";
 String password="sandi12397";
 //String server = "odi.sdnlada2.sch.id"; // www.example.com
@@ -31,7 +32,7 @@ int trig_pin = 10;
 int echo_pin = 11;
 long echotime; 
 float distance;
-void(* ulang) (void) = 0;
+String mair;
 void setup()
 {
   Serial3.begin(115200);//AT+UART_DEF=9600,8,1,0,0
@@ -50,6 +51,12 @@ void setup()
   pinMode(trig_pin, OUTPUT); 
   pinMode(echo_pin, INPUT);
   digitalWrite(trig_pin, LOW);
+  lcd.init();                   
+  lcd.backlight();
+  isi(0,0,"0  0 0000 0 000 0000");
+  isi(0,1,"0  0 0  0 0 0   0  0");
+  isi(0,2,"0  0 0  0 0 0   0000");
+  isi(0,3,"0000 0  0 0 0   0  0");
   reset();
   connectWifi();
 }
@@ -62,14 +69,22 @@ void loop()
     humidity[i] = dht[i].readHumidity();
   }
   int tank=cekair();
-  if(tank>80 || m[6]){
+  if(tank>85 || m[6]){
     digitalWrite(36, LOW);
     Serial.println("Pompa AC Nyala");
-  }else if(tank<10 || !m[6]){
+    if(!m[6]){
+      mair="MANUAL";
+    }else{
+      mair="OTOMATIS";
+    }
+  }else if(tank<15 || !m[6]){
     digitalWrite(36, HIGH);
     if(m[6]){
       tank=100;
     }
+  }
+  if(tank!=100){
+    isi(2,3,"TANGKI:"+String(tank)+"%"+mair);
   }
   for (int i = 0; i < 6; i++) {
     Serial.print("T");
@@ -80,17 +95,23 @@ void loop()
     Serial.print(i);
     Serial.print(" = ");
     Serial.print(humidity[i]);
+    isi(0,0,"S"+String(i+1)+":"+temperature[i]+"C L"+String(i+1)+":"+humidity[i]+"%");
     if(digitalRead(0)!=LOW){
+      isi(2,1,"MODE : OTOMATIS");
       if(!isnan(temperature[i]) && !isnan(humidity[i])){
         if(temperature[i]>29 || humidity[i]<80 && !m[i]){
           digitalWrite(30+i,LOW);
+          digitalWrite(37,LOW);
           Serial.println(" Aktif dalam keadaan NORMAL");
         }else{//kondisi ketika tombol otomatis dan suhu dalam keadaan normal
           if(m[i]){//manual dari tombol app walau sensor aktif
             digitalWrite(30+i,LOW);
+            digitalWrite(37,LOW);
+            isi(0,1,"MENYIRAM DARI APLIKASI");
             Serial.println(" Aktif dari app kondisi normal");
           }else{
             digitalWrite(30+i, HIGH);
+            digitalWrite(37,HIGH);
             Serial.println(" OFF Kondisi Normal ke- "+String(i));
           }
         }
@@ -98,7 +119,9 @@ void loop()
       }else{
         if(m[i]){//manual dari tombol app jika bernilai NaN
           digitalWrite(30+i,LOW);
+          digitalWrite(37,LOW);
           Serial.println(" Aktif dari tombol app kondisi Nan ke- "+String(i));
+          isi(0,1,"MENYIRAM DARI APLIKASI");
         }else{
           if(pengganti[i]!=0){
             Serial.print(" Pengganti di temukan di- "+String(pengganti[i]));
@@ -107,10 +130,12 @@ void loop()
                 digitalWrite(30+pengganti[i], LOW);
                 digitalWrite(30+i, LOW);
                 Serial.println(" Aktif dari pengganti");
+                digitalWrite(37,LOW);
               }else{
                 Serial.println(" Nonaktif dari pengganti");
                 digitalWrite(30+pengganti[i], HIGH);
                 digitalWrite(30+i, HIGH);
+                digitalWrite(37,HIGH);
               }
             }else{
               pengganti[i]=0;
@@ -123,6 +148,7 @@ void loop()
                   pengganti[i]=s;
                   digitalWrite(30+s, LOW);
                   digitalWrite(30+i, LOW);
+                  digitalWrite(37,LOW);
                 }
               }
             }
@@ -135,6 +161,7 @@ void loop()
       Serial.println("manual dari tombol box");
       for (int i2 = 0; i2 < 6; i2++) {
         digitalWrite(30+i2, LOW);
+        digitalWrite(37,LOW);
       }
     }
     if(i!=5){
@@ -212,8 +239,15 @@ void reset() {
   delay(1000);
   if(Serial3.find("OK") ){
     Serial.println("Module Reset");
+    lcd.clear();
+    isi(3,0,"MODUL RESET");
   }else{
     Serial.println("Not REset");
+    lcd.clear();
+    isi(3,0,"GAGAL RESET");
+    delay(1000);
+    lcd.clear();
+    isi(3,0,"MENCOBA LAGI");
     reset();
   }
 }
@@ -224,7 +258,14 @@ void connectWifi() {
   delay(4000);
   if(Serial3.find("OK")) {
     Serial.println("Client Connected!");
+    lcd.clear();
+    isi(3,1,"WIFI TERHUBUNG");
   }else {
+    lcd.clear();
+    isi(0,0,"WIFI TIDAK TERHUBUNG");
+    delay(1000);
+    lcd.clear();
+    isi(3,0,"MENCOBA LAGI");
     connectWifi();
     Serial.println("Cannot connect to wifi"); 
   }
@@ -236,4 +277,11 @@ int cekair(){
   echotime= pulseIn(echo_pin, HIGH);
   distance= 0.0001*((float)echotime*340.0)/2.0;
   return distance;
+}
+void isi(int strt, int cu, String izi){
+   lcd.setCursor(strt,cu);
+   //for(int i=0;i<izi.length();i++){
+    lcd.print(izi);
+    delay(200);
+   //}
 }
