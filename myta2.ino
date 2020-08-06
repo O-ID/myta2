@@ -18,8 +18,8 @@ DHT dht[] = {
   {DHTPIN6, DHT22},
 };
 LiquidCrystal_I2C lcd(0x27,20,4);
-String ssid ="Biasa";
-String password="sandi12397";
+String ssid ="Wi_Virus4";
+String password="Taku2020";
 //String server = "odi.sdnlada2.sch.id"; // www.example.com
 String uri = "/index.php";// our example is /esppost.php
 String txt = "/test.json";
@@ -27,12 +27,49 @@ float humidity[6];
 float temperature[6];
 bool m[7];
 int pengganti[6];
-int tora=0;
+int tank=0;
+int tora=0,tora2=0;
 int trig_pin = 10;
 int echo_pin = 11;
 long echotime; 
 float distance;
 String mair;
+void reset() {
+  Serial3.println("AT+RST");
+  delay(1000);
+  if(Serial3.find("OK") ){
+    Serial.println("Module Reset");
+    lcd.clear();
+    isi(3,0,"MODUL RESET");
+  }else{
+    Serial.println("Not REset");
+    lcd.clear();
+    isi(3,0,"GAGAL RESET");
+    delay(1000);
+    lcd.clear();
+    isi(3,0,"MENCOBA LAGI");
+    reset();
+  }
+}
+void connectWifi() {
+  
+  String cmd = "AT+CWJAP=\"" +ssid+"\",\"" + password + "\""; 
+  Serial3.println(cmd);
+  delay(4000);
+  if(Serial3.find("OK")) {
+    Serial.println("Client Connected!");
+    lcd.clear();
+    isi(3,2,"WIFI TERHUBUNG");
+  }else {
+    lcd.clear();
+    isi(0,0,"WIFI TIDAK TERHUBUNG");
+    delay(1000);
+    lcd.clear();
+    isi(3,0,"MENCOBA LAGI");
+    connectWifi();
+    Serial.println("Cannot connect to wifi"); 
+  }
+}
 void setup()
 {
   Serial3.begin(115200);//AT+UART_DEF=9600,8,1,0,0
@@ -48,6 +85,9 @@ void setup()
   pinMode(35,OUTPUT);
   pinMode(36,OUTPUT);
   pinMode(37,OUTPUT);
+  for(int t=0; t<8; t++){
+    digitalWrite(30+t, HIGH);
+  }
   pinMode(trig_pin, OUTPUT); 
   pinMode(echo_pin, INPUT);
   digitalWrite(trig_pin, LOW);
@@ -68,23 +108,28 @@ void loop()
     temperature[i] = dht[i].readTemperature();
     humidity[i] = dht[i].readHumidity();
   }
-  int tank=cekair();
-  if(tank>85 || m[6]){
+  tank=cekair();
+  if(tank>70){
     digitalWrite(36, LOW);
     Serial.println("Pompa AC Nyala");
-    if(!m[6]){
-      mair="MANUAL";
-    }else{
-      mair="OTOMATIS";
-    }
-  }else if(tank<15 || !m[6]){
+//    if(!m[6]){
+//      mair="MANUAL";
+//    }else{
+//      mair="OTOMATIS";
+//    }
+  }else if(tank<15){
     digitalWrite(36, HIGH);
-    if(m[6]){
-      tank=100;
-    }
+//    if(m[6]){
+//      tank=100;
+//      mair="MANUAL";
+//    }else{
+//      mair="OTOMATIS";
+//    }
   }
   if(tank!=100){
-    isi(2,3,"TANGKI:"+String(tank)+"%"+mair);
+    isi(0,3,"TANGKI:"+String(100-tank)+"%"+mair);
+  }else{
+    isi(0,3,"TANGKI:"+String(tank)+"%"+mair);
   }
   for (int i = 0; i < 6; i++) {
     Serial.print("T");
@@ -96,6 +141,7 @@ void loop()
     Serial.print(" = ");
     Serial.print(humidity[i]);
     isi(0,0,"S"+String(i+1)+":"+temperature[i]+"C L"+String(i+1)+":"+humidity[i]+"%");
+    delay(500);
     if(digitalRead(0)!=LOW){
       isi(2,1,"MODE : OTOMATIS");
       if(!isnan(temperature[i]) && !isnan(humidity[i])){
@@ -111,8 +157,17 @@ void loop()
             Serial.println(" Aktif dari app kondisi normal");
           }else{
             digitalWrite(30+i, HIGH);
-            digitalWrite(37,HIGH);
+//            digitalWrite(37,HIGH);
             Serial.println(" OFF Kondisi Normal ke- "+String(i));
+            tora2=0;
+            for(int j=0; j<6; j++){
+              if(temperature[j]>29 || humidity[j]<80 && !m[j]){
+                tora2++;
+              }
+            }
+            if(tora2==0){
+              digitalWrite(37,HIGH);
+            }
           }
         }
          pengganti[i]=0;
@@ -130,12 +185,19 @@ void loop()
                 digitalWrite(30+pengganti[i], LOW);
                 digitalWrite(30+i, LOW);
                 Serial.println(" Aktif dari pengganti");
-                digitalWrite(37,LOW);
               }else{
                 Serial.println(" Nonaktif dari pengganti");
+                tora2=0;
+                for(int j=0; j<6; j++){
+                  if(temperature[j]>29 || humidity[j]<80 && !m[j]){
+                    tora2++;
+                  }
+                }
+                if(tora2==0){
+                  digitalWrite(37,HIGH);
+                }
                 digitalWrite(30+pengganti[i], HIGH);
                 digitalWrite(30+i, HIGH);
-                digitalWrite(37,HIGH);
               }
             }else{
               pengganti[i]=0;
@@ -148,7 +210,6 @@ void loop()
                   pengganti[i]=s;
                   digitalWrite(30+s, LOW);
                   digitalWrite(30+i, LOW);
-                  digitalWrite(37,LOW);
                 }
               }
             }
@@ -158,11 +219,12 @@ void loop()
       //otomatis dari tombol box
     }else{
       //manual dari tombol box
+      isi(2,1,"MODE : MANUAL");
       Serial.println("manual dari tombol box");
       for (int i2 = 0; i2 < 6; i2++) {
         digitalWrite(30+i2, LOW);
-        digitalWrite(37,LOW);
       }
+      digitalWrite(37,LOW);
     }
     if(i!=5){
       data+="tp"+String(i)+"="+temperature[i]+"&hm"+String(i)+"="+humidity[i]+"&";
@@ -183,7 +245,7 @@ Serial3.println("AT+CIPSTART=\"TCP\",\"odi.sdnlada2.sch.id\",80");//start a TCP 
   if( Serial3.find("OK")) {
     Serial.println("TCP connection ready");
   }
-//  delay(1000);
+  delay(1000);
   String postRequest =
   "POST " + urr + " HTTP/1.0\r\n" +
   "Host: odi.sdnlada2.sch.id\r\n" +
@@ -234,42 +296,7 @@ Serial3.println("AT+CIPSTART=\"TCP\",\"odi.sdnlada2.sch.id\",80");//start a TCP 
     }
   }
 }
-void reset() {
-  Serial3.println("AT+RST");
-  delay(1000);
-  if(Serial3.find("OK") ){
-    Serial.println("Module Reset");
-    lcd.clear();
-    isi(3,0,"MODUL RESET");
-  }else{
-    Serial.println("Not REset");
-    lcd.clear();
-    isi(3,0,"GAGAL RESET");
-    delay(1000);
-    lcd.clear();
-    isi(3,0,"MENCOBA LAGI");
-    reset();
-  }
-}
-void connectWifi() {
-  
-  String cmd = "AT+CWJAP=\"" +ssid+"\",\"" + password + "\""; 
-  Serial3.println(cmd);
-  delay(4000);
-  if(Serial3.find("OK")) {
-    Serial.println("Client Connected!");
-    lcd.clear();
-    isi(3,1,"WIFI TERHUBUNG");
-  }else {
-    lcd.clear();
-    isi(0,0,"WIFI TIDAK TERHUBUNG");
-    delay(1000);
-    lcd.clear();
-    isi(3,0,"MENCOBA LAGI");
-    connectWifi();
-    Serial.println("Cannot connect to wifi"); 
-  }
-}
+
 int cekair(){
   digitalWrite(trig_pin, HIGH);
   delayMicroseconds(10);
