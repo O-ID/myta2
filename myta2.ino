@@ -20,7 +20,7 @@ DHT dht[] = {
 LiquidCrystal_I2C lcd(0x27,20,4);
 String ssid ="Wi_Virus4";
 String password="Taku2020";
-//String server = "odi.sdnlada2.sch.id"; // www.example.com
+//String server = "isi dengan domain yang mengarah ke server-side anda"; // www.example.com
 String uri = "/index.php";// our example is /esppost.php
 String txt = "/test.json";
 float humidity[6];
@@ -241,7 +241,7 @@ void loop()
 }
 void httppost (String urr) {
   DynamicJsonDocument doc(1024);
-Serial3.println("AT+CIPSTART=\"TCP\",\"odi.sdnlada2.sch.id\",80");//start a TCP connection.
+Serial3.println("AT+CIPSTART=\"TCP\",\"isi dengan domain yang mengarah ke server-side anda\",80");//start a TCP connection.
   if( Serial3.find("OK")) {
     Serial.println("TCP connection ready");
   }
